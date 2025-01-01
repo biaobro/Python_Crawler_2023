@@ -1,0 +1,3 @@
+url_self_wrapped,url_other_wrapped,mid,name,sex,face,sign,rank,level,jointime,moral,silence,birthday,coins,following,follower
+https://api.bilibili.com/x/space/acc/info?mid=1&jsonp=jsonp,https://api.bilibili.com/x/relation/stat?vmid=1&jsonp=jsonp,1,bishi,保密,http://i0.hdslb.com/bfs/face/34c5b30a990c7ce4a809626d8153fa7895ec7b63.gif,,10000,5,0,0,0,,0,5,167206
+https://api.bilibili.com/x/space/acc/info?mid=2&jsonp=jsonp,https://api.bilibili.com/x/relation/stat?vmid=2&jsonp=jsonp,2,碧诗,男,https://i2.hdslb.com/bfs/face/ef0457addb24141e15dfac6fbf45293ccf1e32ab.jpg,https://kami.im 直男过气网红 #  We Are Star Dust,20000,6,0,0,0,09-19,0,278,1059729
