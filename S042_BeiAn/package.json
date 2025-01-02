@@ -1,0 +1,7 @@
+{
+  "name": "S042_BeiAn",
+  "version": "1.0.0",
+  "dependencies": {
+    "jsdom": "^21.1.1"
+  }
+}
