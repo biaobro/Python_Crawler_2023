@@ -1,0 +1,7 @@
+{
+  "name": "S065_GGZY_GCS_金昌市公共资源交易网",
+  "version": "1.0.0",
+  "devDependencies": {
+    "crypto-js": "^4.1.1"
+  }
+}
