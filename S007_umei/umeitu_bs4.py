@@ -16,7 +16,7 @@
 
 # 思路
     0，umeitu 无需登录，请求时连 header-UserAgent 都不需要，目测没有任何反爬措施，可以作为很好的爬虫入门
-    1，umeitu 这个网站的架构是列表页->图片列表，点击图片进入高清大图页
+    1，umeitu 这个网站的架构是列表页展示列表，点击不同人图片，进入这个人的高清大图页
     2，列表页本身会存在多页，【美女写真】达到了164页，具体的高清大图页也会存在多页
     3，index_1 和 page_1 都不可用，后续页码都是从2开始
     4，封装了2个函数，1个用于获取详情页上的高清大图，另一个用于获取列表页
@@ -37,46 +37,57 @@ import re
 from bs4 import BeautifulSoup
 import os
 
+from urllib3.exceptions import MaxRetryError
+
 # global variables
 url_host = "https://www.umeitu.com"
-url_index = url_host + "/meinvtupian/meinvxiezhen/index.htm"  # 列表页地址
+tags = "/tags/graphis"
+url_index_start = url_host + tags + '/'
 
 
 # 请求【大图】图片地址，并保存图片
 # hr : high resolution
-def get_mm_page(url_mm_page):
+def get_mm_page(url):
+    print("url_detail_page : ", url)
     # url 示例：
     # 首页：https://www.umeitu.com/img/52419.html
     # 第2页：https://www.umeitu.com/img/52419_2.html
+    # 首页和其他页 url 格式不同，这里做个判断。如果 url 里没有包含下划线，则补上 _1
     regex_page_num = r"\d+_?\d+"
-    page_num = re.findall(regex_page_num, url_mm_page)[0]
+    page_num = re.findall(regex_page_num, url)[0]
+
+    print("page_num : ", page_num)
     if "_" not in page_num:
         page_num = page_num + "_" + str(1)
 
     # 发送请求
-    resp = requests.get(url_mm_page)
+    resp = requests.get(url)
     resp.encoding = 'utf-8'
     soup = BeautifulSoup(resp.text, 'html.parser')
 
     # 找到页面上高清大图的地址，因为地址中包含有无规律字符串，所以必须先得到html 页面
     # 再从 html 页面中得到大图地址
-    url_mm_img = soup.find("div", attrs={"class": "vipimglist"}).find("img").get("src")
-    print("url_mm_img : " + url_mm_img)
+    url_img = soup.find("div", attrs={"class": "vipimglist"}).find("img").get("src")
+    print("url_img : " + url_img)
 
-    get_mm_img(url_mm_img, page_num)
+    # 得到大图地址，请求大图
+    get_img(url_img, page_num)
 
 
 # 直接请求图片 url，拿到响应并保存
-def get_mm_img(url_mm_img, file_name):
+def get_img(url_mm_img, file_name):
     # 请求获取图片
     # 以页码作为文件名保存
-    img = requests.get(url_mm_img).content
     if not os.path.exists("images"):
         os.mkdir("images")
-    with open("images/umeitu_%s.jpg" % file_name, 'wb') as f:
-        f.write(img)
 
-    print("umeitu_%s.jpg grab done !" % file_name)
+    try:
+        img = requests.get(url_mm_img).content
+        with open("images/umeitu_%s.jpg" % file_name, 'wb') as f:
+            f.write(img)
+        print("umeitu_%s.jpg grab done !\n" % file_name)
+    except MaxRetryError:
+        return
 
 
 # 请求列表页，得到每张【小图】图片的对应的页面地址
@@ -90,43 +101,63 @@ def get_index_page(url_index):
 
     # find the link of each preview image
     mm_list = soup.find_all("div", attrs={"class": "tit"})
+    print(f'got {len(mm_list)} mms in the 1st tags page\n')
+
+    # 得到所有美女
     for mm in mm_list:
-        # 找到每个 mm 对应的图片数量，内容格式：38P [秀人XiuRen] No.4612 吴雪瑶
+        # 找到每个 mm 对应的图片数量，内容类似：38P [秀人XiuRen] No.4612 吴雪瑶
+        # 所以需要以P为界限来切割，得到这个人的图片数量是38
         pic_count = int(mm.find("a").string.split("P")[0])
-        url_mm = url_host + mm.find("a").get("href")
-        # 从1开始 而不是从0
+
+        # 得到这个人的38张图片详情页地址
+        url_detail_page = url_host + mm.find("a").get("href")
+
+        # 得到这个 mm 的全部图片
+        # 页码是从1开始 而不是从0
         for count in range(1, pic_count + 1):
+
+            # 得到详情页面地址，请求页面
+            # 第1页，url 里是不带页码的，可以直接发起请求
+            # 请求后对 url 做格式化，补上 _1，方便后续正则表达式直接替换
             if count == 1:
-                get_mm_page(url_mm)
-                url_mm = re.sub(r"\.html", "_1.html", url_mm)
+                get_mm_page(url_detail_page)
+                url_detail_page = re.sub(r"\.html", "_1.html", url_detail_page)
+
+            # 第1页之后的其他页面，需要在url里替换页码
             else:
-                url_mm = re.sub(r"(?<=_)(\d+)", str(count), url_mm)
-                get_mm_page(url_mm)
-            print(url_mm)
+                url_detail_page = re.sub(r"(?<=_)(\d+)", str(count), url_detail_page)
+                get_mm_page(url_detail_page)
+
+            # 确认下次待请求的 url
+            # print(url_detail_page)
 
         # 测试控制，只爬取第1个人物对应的全部高清大图
         break
 
-    # 如果有index_2 等等，则继续爬，可以实现爬全网的目的了，慎用
-    lastpage = find_lastpage(resp)
-    if lastpage is not None:
-        for pagenum in range(2, int(lastpage) + 1):
-            url_index_next = url_index.replace(".htm", "_" + str(pagenum) + ".htm")
-            print(url_index_next)
+    # 看看列表页是否有下一页，如果有，则继续爬，可以实现爬全网的目的了，慎用
+    # 此处应该有 try except
+    last_page_num = find_last_page(resp)
+    if last_page_num is not None:
 
-            # 测试控制，只爬取第1个列表页面
-            break
+        # last_page_num
+        for pageNum in range(2, 2 + 1):
+            url_index_next = url_host + tags + "_" + str(pageNum) + "/"
+            print('url_index_next : ', url_index_next)
             get_index_page(url_index_next)
 
 
-# 继续抽象，因为在列表页 和 详情页 都需要判断是否有下一页，或者最后一页的页码
-def find_lastpage(resp):
-    regex_pattern = re.compile(r'<a href=.*?(\d*)\.html\">尾页', re.S)
-    lastpage = regex_pattern.search(resp.text).group(1)
-    print("尾页页码为 : ", lastpage)
-    return lastpage
+# 因为在人物列表页 和 人物详情页 都需要判断是否有下一页，或者最后一页的页码
+# 所以抽象出1个单独的函数
+def find_last_page(resp):
+    regex_pattern = re.compile(r'<a href=.*?(\d*)\/\">尾页', re.S)
+    try:
+        last_page_num = regex_pattern.search(resp.text).group(1)
+        print("尾页页码为 : ", last_page_num)
+        return int(last_page_num)
+    except:
+        return None
 
 
 if __name__ == '__main__':
     # 受2个 break 的控制，目前只爬取第1页上第1个mm 的图片
-    get_index_page(url_index)
+    get_index_page(url_index_start)

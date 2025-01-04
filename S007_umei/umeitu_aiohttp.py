@@ -41,14 +41,15 @@ import asyncio
 
 # global variables
 url_host = "https://www.umeitu.com"
-url_index = url_host + "/meinvtupian/meinvxiezhen/index.htm"  # 列表页地址
+tags = "/tags/graphis"
+url_index = url_host + tags + '/'
 
 
 async def get(url):
     session = aiohttp.ClientSession()
     response = await session.get(url)
-    result = await response.text()
-    session.close()
+    result = response.text
+    await session.close()
     return result
 
 
@@ -58,7 +59,7 @@ async def request(url):
     print('Get response from', url, 'Result:', result)
 
 
-tasks = [asyncio.ensure_future(request()) for _ in range(5)]
+tasks = [asyncio.ensure_future(request(url_index)) for _ in range(5)]
 loop = asyncio.get_event_loop()
 loop.run_until_complete(asyncio.wait(tasks))
 
@@ -76,7 +77,7 @@ async def get_mm_page(url_mm_page):
         page_num = page_num + "_" + str(1)
 
     # 发送请求
-    resp = requests.get(url_mm_page)
+    resp = await get(url_mm_page)
     resp.encoding = 'utf-8'
     soup = BeautifulSoup(resp.text, 'html.parser')
 
@@ -135,7 +136,7 @@ def get_index_page(url_index):
     lastpage = find_lastpage(resp)
     if lastpage is not None:
         for pagenum in range(2, int(lastpage) + 1):
-            url_index_next = url_index.replace(".htm", "_" + str(pagenum) + ".htm")
+            url_index_next = url_host + tags + "_" + str(pagenum) + "/"
             print(url_index_next)
 
             # 测试控制，只爬取第1个列表页面
@@ -145,10 +146,13 @@ def get_index_page(url_index):
 
 # 继续抽象，因为在列表页 和 详情页 都需要判断是否有下一页，或者最后一页的页码
 def find_lastpage(resp):
-    regex_pattern = re.compile(r'<a href=.*?(\d*)\.html\">尾页', re.S)
-    lastpage = regex_pattern.search(resp.text).group(1)
-    print("尾页页码为 : ", lastpage)
-    return lastpage
+    regex_pattern = re.compile(r'<a href=.*?(\d*)\/\">尾页', re.S)
+    try:
+        last_page_num = regex_pattern.search(resp.text).group(1)
+        print("尾页页码为 : ", last_page_num)
+        return int(last_page_num)
+    except:
+        return None
 
 
 if __name__ == '__main__':
