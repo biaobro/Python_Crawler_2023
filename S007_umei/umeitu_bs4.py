@@ -115,18 +115,8 @@ def get_index_page(url_index):
         # 得到这个 mm 的全部图片
         # 页码是从1开始 而不是从0
         for count in range(1, pic_count + 1):
-
-            # 得到详情页面地址，请求页面
-            # 第1页，url 里是不带页码的，可以直接发起请求
-            # 请求后对 url 做格式化，补上 _1，方便后续正则表达式直接替换
-            if count == 1:
-                get_mm_page(url_detail_page)
-                url_detail_page = re.sub(r"\.html", "_1.html", url_detail_page)
-
-            # 第1页之后的其他页面，需要在url里替换页码
-            else:
-                url_detail_page = re.sub(r"(?<=_)(\d+)", str(count), url_detail_page)
-                get_mm_page(url_detail_page)
+            url_detail_page_with_num = url_detail_page.replace('.html', f'_{count}.html')
+            get_mm_page(url_detail_page_with_num)
 
             # 确认下次待请求的 url
             # print(url_detail_page)

@@ -31,7 +31,7 @@
     1，需改善【尾页】的查询效率
     2，目前为单线程，图片1张张依次获取，低效
 """
-
+import aiofiles
 import requests
 import re
 from bs4 import BeautifulSoup
@@ -39,29 +39,31 @@ import os
 import aiohttp
 import asyncio
 
+from urllib3.exceptions import MaxRetryError
+
 # global variables
 url_host = "https://www.umeitu.com"
 tags = "/tags/graphis"
 url_index = url_host + tags + '/'
 
 
-async def get(url):
-    session = aiohttp.ClientSession()
-    response = await session.get(url)
-    result = response.text
-    await session.close()
-    return result
-
-
-async def request(url):
-    print('Waiting for', url)
-    result = await get(url)
-    print('Get response from', url, 'Result:', result)
-
-
-tasks = [asyncio.ensure_future(request(url_index)) for _ in range(5)]
-loop = asyncio.get_event_loop()
-loop.run_until_complete(asyncio.wait(tasks))
+# async def get(url):
+#     session = aiohttp.ClientSession()
+#     response = await session.get(url)
+#     result = response.text
+#     await session.close()
+#     return result
+#
+#
+# async def request(url):
+#     print('Waiting for', url)
+#     result = await get(url)
+#     print('Get response from', url, 'Result:', result)
+#
+#
+# tasks = [asyncio.ensure_future(request(url_index)) for _ in range(5)]
+# loop = asyncio.get_event_loop()
+# loop.run_until_complete(asyncio.wait(tasks))
 
 
 # 请求【大图】图片地址，并保存图片
@@ -77,35 +79,36 @@ async def get_mm_page(url_mm_page):
         page_num = page_num + "_" + str(1)
 
     # 发送请求
-    resp = await get(url_mm_page)
-    resp.encoding = 'utf-8'
-    soup = BeautifulSoup(resp.text, 'html.parser')
+    async with requests.get(url_mm_page) as resp:
 
-    # 找到页面上高清大图的地址，因为地址中包含有无规律字符串，所以必须先得到html 页面
-    # 再从 html 页面中得到大图地址
-    url_mm_img = soup.find("div", attrs={"class": "vipimglist"}).find("img").get("src")
-    print("url_mm_img : ", url_mm_img)
+        resp.encoding = 'utf-8'
+        content = await resp.text
+        soup = BeautifulSoup(content, 'html.parser')
 
-    get_mm_img(url_mm_img)
+        # 找到页面上高清大图的地址，因为地址中包含有无规律字符串，所以必须先得到html 页面
+        # 再从 html 页面中得到大图地址
+        url_mm_img = soup.find("div", attrs={"class": "vipimglist"}).find("img").get("src")
+        print("url_mm_img : ", url_mm_img)
+
+        await get_mm_img(url_mm_img)
 
 
 # 直接请求图片 url，拿到响应并保存
-async def get_mm_img(url_mm_img):
-    # 请求图片，以页码作为文件名保存
-    async with requests.get(url_mm_img) as req:
-        return await req.content
-
-
-async def save_mm_img(img_content, file_name):
+async def get_mm_img(url_mm_img, file_name):
+    # 请求获取图片
+    # 以页码作为文件名保存
     if not os.path.exists("images"):
         os.mkdir("images")
-    async with open("images/umeitu_%s.jpg" % file_name, 'wb') as f:
-        f.write(img_content)
-        print("umeitu_%s.jpg saved done !" % file_name)
+
+    async with requests.get(url_mm_img) as resp:
+        img = await resp.content
+        async with aiofiles.open("images/umeitu_%s.jpg" % file_name, 'wb') as f:
+            await f.write(img)
+        print("umeitu_%s.jpg grab done !\n" % file_name)
 
 
 # 请求列表页，得到每张【小图】图片的对应的页面地址
-def get_index_page(url_index):
+async def get_index_page(url_index):
     # send request
     resp = requests.get(url_index)
     resp.encoding = 'utf-8'
@@ -119,29 +122,26 @@ def get_index_page(url_index):
         # 找到每个 mm 对应的图片数量，内容格式：38P [秀人XiuRen] No.4612 吴雪瑶
         pic_count = int(mm.find("a").string.split("P")[0])
         url_mm = url_host + mm.find("a").get("href")
+        tasks = []
+
         # 从1开始 而不是从0
         for count in range(1, pic_count + 1):
-            if count == 1:
-                get_mm_page(url_mm)
-                url_mm = re.sub(r"\.html", "_1.html", url_mm)
-            else:
-                url_mm = re.sub(r"(?<=_)(\d+)", str(count), url_mm)
-                get_mm_page(url_mm)
-
-
+            url_mm_page = url_mm.replace('.html', f'_{count}.html')
+            tasks.append(asyncio.create_task(get_mm_page(url_mm_page)))
+        await asyncio.wait(tasks)
         # 测试控制，只爬取第1个人物对应的全部高清大图
         break
 
     # 如果有index_2 等等，则继续爬，可以实现爬全网的目的了，慎用
-    lastpage = find_lastpage(resp)
-    if lastpage is not None:
-        for pagenum in range(2, int(lastpage) + 1):
-            url_index_next = url_host + tags + "_" + str(pagenum) + "/"
-            print(url_index_next)
-
-            # 测试控制，只爬取第1个列表页面
-            break
-            get_index_page(url_index_next)
+    # lastpage = find_lastpage(resp)
+    # if lastpage is not None:
+    #     for pagenum in range(2, int(lastpage) + 1):
+    #         url_index_next = url_host + tags + "_" + str(pagenum) + "/"
+    #         print(url_index_next)
+    #
+    #         # 测试控制，只爬取第1个列表页面
+    #         break
+    #         get_index_page(url_index_next)
 
 
 # 继续抽象，因为在列表页 和 详情页 都需要判断是否有下一页，或者最后一页的页码
@@ -157,4 +157,6 @@ def find_lastpage(resp):
 
 if __name__ == '__main__':
     # 受2个 break 的控制，目前只爬取第1页上第1个mm 的图片
-    get_index_page(url_index)
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(get_index_page(url_index))
