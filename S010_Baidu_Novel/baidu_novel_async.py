@@ -54,7 +54,7 @@ async def getChapter(book_id, chapter_id, chapter_title):
     async with aiohttp.ClientSession() as session:
         async with session.get(url_chapter) as resp:
             chapter = await resp.json() # 在这里直接拆解字典的话会报错
-            async with aiofiles.open(r'data\{}.txt'.format(chapter_title), 'w', encoding='utf-8') as f:
+            async with aiofiles.open(r'{}.txt'.format(chapter_title), 'w', encoding='utf-8') as f:
                 # 所有异步的操作 需要加 await
                 # await 表示挂起，什么时候有东西了 什么时候再读
                 await f.write(chapter['data']['novel']['content'])
