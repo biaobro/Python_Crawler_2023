@@ -16,7 +16,7 @@ import asyncio
 
 
 def do_requests(session):
-    return session.get('https://baidu.com')
+    return session.get('https://baidu.com', proxy="http://127.0.0.1:7890")
 
 
 async def main():
