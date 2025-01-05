@@ -64,5 +64,9 @@ async def getChapter(book_id, chapter_id, chapter_title):
 if __name__ == '__main__':
     book_id = '4306063500'
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(getCatalog(book_id))
+    # Deprecation 写法
+    # loop = asyncio.get_event_loop()
+    # loop.run_until_complete(getCatalog(book_id))
+
+    # Higher-level
+    asyncio.run(getCatalog(book_id))
